@@ -3,7 +3,7 @@ import cv2
 
 
 # for i in range(8):
-img = cv2.imread(f'../imgdata/img4.jpg', cv2.COLOR_BGR2GRAY)
+img = cv2.imread('.../pnp/imgdata/img4.jpg', cv2.color_bgr2gray)
 
 # Define the rectangular region (x, y, width, height)
 w1 = img.shape[1]
