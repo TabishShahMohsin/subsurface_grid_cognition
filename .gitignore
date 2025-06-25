@@ -1,0 +1,44 @@
+# Ignore everything
+*
+
+# Allow folder traversal
+!*/
+
+# Allow code and notebook files
+!**/*.py
+!**/*.ipynb
+
+# Allow documentation and config
+!README
+!README.md
+!.gitignore
+
+# Ignore Python cache files
+__pycache__/
+*.py[cod]
+*.so
+
+# Ignore notebook checkpoints
+.ipynb_checkpoints/
+
+# Ignore virtual environments and dependency folders
+env/
+venv/
+.venv/
+
+# Ignore OS or editor-specific files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Ignore build/output artifacts (optional, add/remove as needed)
+*.log
+*.out
+*.exe
+*.dll
+*.bin
+*.obj
+*.pkl
