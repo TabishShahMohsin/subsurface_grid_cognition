@@ -1,21 +1,22 @@
 import cv2
 import numpy as np
+from scipy.optimize import minimize
+# IN chaining in video loop we would need to use the prev values to init the next values
 
 
 def rotation_matrix(roll, pitch, yaw):
     # Correction for looking down
-    R_c = np.array(
-        [
+    Rc = np.array([
             [1, 0,0],
             [0, -1, 0],
             [0, 0, -1],
-        ]
-    )
-
+    ])
     roll, pitch, yaw = np.radians([roll, pitch, yaw])
     Rx = np.array(
-        [[1, 0, 0], [0, np.cos(roll), -np.sin(roll)], [0, np.sin(roll), np.cos(roll)]]
-    )
+        [[1, 0, 0],
+         [0, np.cos(roll), -np.sin(roll)],
+         [0, np.sin(roll), np.cos(roll)]
+    ])
     Ry = np.array(
         [
             [np.cos(pitch), 0, np.sin(pitch)],
@@ -26,7 +27,7 @@ def rotation_matrix(roll, pitch, yaw):
     Rz = np.array(
         [[np.cos(yaw), -np.sin(yaw), 0], [np.sin(yaw), np.cos(yaw), 0], [0, 0, 1]]
     )
-    return Rz @ Ry @ Rx @ R_c
+    return Rz @ Ry @ Rx @ Rc
 
 
 def project_points(points_3d, R, t, K):
@@ -52,11 +53,11 @@ def draw_scene(roll, pitch, yaw, tx, ty, tz):
 
     # Grid setup
     tile_w, tile_h = 5, 3  # cm
-    rows, cols = 8, 8
+    rows, cols = 25, 15 
     grid_cx = cols * tile_w / 2
     grid_cy = rows * tile_h / 2
 
-    img = np.ones((800, 800, 3), dtype=np.uint8) * 255
+    img = np.zeros((800, 800), dtype=np.uint8) * 255
 
     for i in range(rows):
         for j in range(cols):
@@ -73,55 +74,47 @@ def draw_scene(roll, pitch, yaw, tx, ty, tz):
             )
             pts_2d, mask = project_points(corners, R, t, K)
             if mask.all():
-                cv2.polylines(img, [pts_2d], True, (0, 0, 0), 1)
-
-    # Draw the origin marker if visible
-    origin_2d, visible = project_points(np.array([[0, 0, 0]]), R, t, K)
-    if visible[0]:
-        cv2.circle(img, tuple(origin_2d[0]), 5, (0, 0, 255), -1)
-        cv2.putText(
-            img,
-            "Origin",
-            tuple(origin_2d[0] + [10, -10]),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.5,
-            (0, 0, 255),
-            1,
-        )
+                cv2.polylines(img, [pts_2d], True, (255, 255, 255), 1)
 
     return img
 
-
-# GUI update callback
-def update(_=None):
-    roll = cv2.getTrackbarPos("Roll", win) - 180
-    pitch = cv2.getTrackbarPos("Pitch", win) - 180
-    yaw = cv2.getTrackbarPos("Yaw", win) - 180
-    tx = cv2.getTrackbarPos("Tx", win) - 100
-    ty = cv2.getTrackbarPos("Ty", win) - 100
-    tz = cv2.getTrackbarPos("Tz", win)
-
-    img = draw_scene(roll, pitch, yaw, tx, ty, tz)
-    cv2.imshow(win, img)
-    # cv2.imwrite("sample.png", img)
+def loss_function(pose, img2: np.array) -> float:    
+    roll, pitch, yaw, tx, ty, tz = pose
+    img1 = draw_scene(roll, pitch, yaw, tx, ty, tz)
+    cv2.imshow('something', img1)
+    cv2.waitKey(0)
+    cv2.imshow('something', img2)
+    cv2.waitKey(0)
+    abs_diff = np.abs(img1.astype(np.float32) - img2.astype(np.float32))
+    l1_loss = np.mean(abs_diff)
+    return l1_loss
 
 
-# Create window and trackbars
-win = "Camera View Explorer"
-cv2.namedWindow(win)
+roll, pitch, yaw, tx, ty, tz = 0, 0, 0, 0, 0, 50
+img = cv2.imread('sample.png')
+img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+img = cv2.Canny(img, 100, 200)
 
-cv2.createTrackbar("Roll", win, 180, 360, update)
-cv2.createTrackbar("Pitch", win, 180, 360, update)
-cv2.createTrackbar("Yaw", win, 180, 360, update)
-cv2.createTrackbar("Tx", win, 100, 200, update)
-cv2.createTrackbar("Ty", win, 100, 200, update)
-cv2.createTrackbar("Tz", win, 50, 300, update)
+init_pose = np.array([0, 0, 0, 0, 0, 20]) 
+print(loss_function(init_pose, img))
 
-update()  # Draw first frame
+bounds = [
+        (-90, 90),    # roll
+        (-90, 90),    # pitch
+        (-180, 180),  # yaw
+        (-200, 200),  # tx
+        (-200, 200),  # ty
+        (10, 500)     # tz
+    ]
 
-# Main loop
-while True:
-    if cv2.waitKey(30) == 27:  # ESC to quit
-        break
+res = minimize(
+    loss_function,
+    init_pose,
+    args=(img, ),
+    method='L-BFGS-B',
+    bounds=bounds,
+    options={'maxiter':300, 'disp' : True,}
+)
 
-cv2.destroyAllWindows()
+optimized_pose = res.x
+print(optimized_pose)

@@ -1,11 +1,21 @@
 import cv2
 import numpy as np
 
+# Goals:
+    # Moving the AUV in a rectangle
+    # Extracting pitures out of the motion
+    # Tracking corners with corner id
+    # Corner should have a bool for in_frame
+    
+# Future:
+    # Adding noise in everything including roll and pitch
+    # 
+
 # ==== Editable Grid Parameters ====
 tile_w = 10     # Tile width (along x) in cm
 tile_h = 15     # Tile height (along y) in cm
-rows = 10       # Number of rows to show in both +y and -y directions (i.e. 2*rows in total)
-cols = 10       # Number of columns to show in both +x and -x directions (i.e. 2*cols in total)
+rows = 30       # Number of rows to show in both +y and -y directions (i.e. 2*rows in total)
+cols = 30       # Number of columns to show in both +x and -x directions (i.e. 2*cols in total)
 
 # ==== Function to get rotation matrix with yaw (Z-axis rotation) ====
 def rotation_matrix_yaw_only(yaw_deg):
@@ -111,40 +121,91 @@ def draw_scene(yaw, tx, ty, tz):
 # ==== Callback for GUI sliders (trackbars) ====
 # This is the "function reference" that OpenCV calls when a slider changes
 # `_` is a dummy argument passed by OpenCV (the new trackbar value)
-def update(_=None):
-    # Read current values from sliders
-    print("Update was called.")
-    yaw = cv2.getTrackbarPos("Yaw", win)           # [0–360]
-    tx  = cv2.getTrackbarPos("Tx", win) - 100      # [-100 to +100]
-    ty  = cv2.getTrackbarPos("Ty", win) - 100      # [-100 to +100]
-    tz  = cv2.getTrackbarPos("Tz", win) + 1        # [51 to 301], avoid 0 to prevent divide-by-zero
+# def update(_=None):
+#     # Read current values from sliders
+#     yaw = cv2.getTrackbarPos("Yaw", win)           # [0–360]
+#     tx  = cv2.getTrackbarPos("Tx", win) - 100      # [-100 to +100]
+#     ty  = cv2.getTrackbarPos("Ty", win) - 100      # [-100 to +100]
+#     tz  = cv2.getTrackbarPos("Tz", win) + 1        # [51 to 301], avoid 0 to prevent divide-by-zero
 
-    # Redraw the image with updated parameters
-    img = draw_scene(yaw, tx, ty, tz)
+#     # Redraw the image with updated parameters
+#     img = draw_scene(yaw, tx, ty, tz)
 
-    # Show the new image in the same window
-    cv2.imshow(win, img)
-    # cv2.imwrite("changed.jpeg", img) # Can save images just like that with a particular parameters
+#     # Show the new image in the same window
+#     cv2.imshow(win, img)
+#     # cv2.imwrite("changed.jpeg", img) # Can save images just like that with a particular parameters
 
-# ==== GUI setup ====
-win = "AUV Camera View"                # Name of the OpenCV window
-cv2.namedWindow(win)                   # Create the window
+# # ==== GUI setup ====
+# win = "AUV Camera View"                # Name of the OpenCV window
+# cv2.namedWindow(win)                   # Create the window
 
-# Each trackbar is linked to the update() function, which is called when the slider is moved
-# This is called a "callback" — we pass the function `update` as a reference (not update())
-cv2.createTrackbar("Yaw", win, 0, 360, update)     # Starts at 180 → maps to yaw = 0
-cv2.createTrackbar("Tx",  win, 100, 200, update)     # Maps to tx = -100 to +100
-cv2.createTrackbar("Ty",  win, 100, 200, update)     # Maps to ty = -100 to +100
-cv2.createTrackbar("Tz",  win, 50, 300, update)      # Maps to tz = 51 to 301 (always positive)
+# # Each trackbar is linked to the update() function, which is called when the slider is moved
+# # This is called a "callback" — we pass the function `update` as a reference (not update())
+# cv2.createTrackbar("Yaw", win, 0, 360, update)     # Starts at 180 → maps to yaw = 0
+# cv2.createTrackbar("Tx",  win, 100, 200, update)     # Maps to tx = -100 to +100
+# cv2.createTrackbar("Ty",  win, 100, 200, update)     # Maps to ty = -100 to +100
+# cv2.createTrackbar("Tz",  win, 50, 300, update)      # Maps to tz = 51 to 301 (always positive)
 
-# Initial draw: we manually call update() once to draw the first frame before any slider is moved
-update()
+# # Initial draw: we manually call update() once to draw the first frame before any slider is moved
+# update()
 
-# ==== Event loop to keep the window open ====
-# waitKey(30) waits for 30 milliseconds for a key press
-# If you press ESC (key code 27), it breaks the loop and closes the window
-while True:
-    if cv2.waitKey(30) == 27:  # 27 = ESC key
-        break
+# # ==== Event loop to keep the window open ====
+# # waitKey(30) waits for 30 milliseconds for a key press
+# # If you press ESC (key code 27), it breaks the loop and closes the window
+# while True:
+#     if cv2.waitKey(30) == 27:  # 27 = ESC key
+#         break
 
-cv2.destroyAllWindows()  # Clean up all OpenCV windows
+# cv2.destroyAllWindows()  # Clean up all OpenCV windows
+
+
+yaw = 0
+# For now the distance is in cm
+tx = 0
+ty = 0
+tz = 50
+
+img = draw_scene(yaw, tx, ty, tz)
+
+# cv2.imshow("scene", img)
+cv2.waitKey(0)
+
+import os
+os.makedirs("data", exist_ok=True)
+base_path = os.path.join('.', 'data', 'image_')
+
+cv2.imwrite(base_path + '0.jpg', img)
+image_count = 0
+
+for i in range(100):
+    tx += 1
+    image_count += 1
+    cv2.imwrite(base_path + str(image_count) + '.jpg', draw_scene(yaw, tx, ty, tz))
+
+for i in range(100):
+    ty += 1
+    image_count += 1
+    cv2.imwrite(base_path + str(image_count) + '.jpg', draw_scene(yaw, tx, ty, tz))
+
+for i in range(90):
+    yaw += np.deg2rad(2)
+    image_count += 1
+    cv2.imwrite(base_path + str(image_count) + '.jpg', draw_scene(yaw, tx, ty, tz))
+
+
+for i in range(100):
+    tx -= 1
+    image_count += 1
+    cv2.imwrite(base_path + str(image_count) + '.jpg', draw_scene(yaw, tx, ty, tz))
+
+for i in range(100):
+    ty -= 1
+    image_count += 1
+    cv2.imwrite(base_path + str(image_count) + '.jpg', draw_scene(yaw, tx, ty, tz))
+
+    
+for i in range(90):
+    yaw -= np.deg2rad(2)
+    image_count += 1
+    cv2.imwrite(base_path + str(image_count) + '.jpg', draw_scene(yaw, tx, ty, tz))
+    
