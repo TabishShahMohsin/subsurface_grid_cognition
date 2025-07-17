@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from scipy.optimize import minimize
+from scipy.optimize import differential_evolution, dual_annealing, minimize
 # IN chaining in video loop we would need to use the prev values to init the next values
 
 
@@ -57,7 +57,7 @@ def draw_scene(roll, pitch, yaw, tx, ty, tz):
     grid_cx = cols * tile_w / 2
     grid_cy = rows * tile_h / 2
 
-    img = np.zeros((800, 800), dtype=np.uint8) * 255
+    img = np.zeros((800, 800), dtype=np.uint8)
 
     for i in range(rows):
         for j in range(cols):
@@ -74,47 +74,79 @@ def draw_scene(roll, pitch, yaw, tx, ty, tz):
             )
             pts_2d, mask = project_points(corners, R, t, K)
             if mask.all():
-                cv2.polylines(img, [pts_2d], True, (255, 255, 255), 1)
+                cv2.polylines(img, [pts_2d], True, 255, 1)
 
     return img
 
 def loss_function(pose, img2: np.array) -> float:    
     roll, pitch, yaw, tx, ty, tz = pose
     img1 = draw_scene(roll, pitch, yaw, tx, ty, tz)
+    # lines1 = cv2.HoughLines(img1, 1, np.pi / 180, 100)
+    # lines2 = cv2.HoughLines(img2, 1, np.pi / 180, 100)
     cv2.imshow('something', img1)
     cv2.waitKey(0)
     cv2.imshow('something', img2)
     cv2.waitKey(0)
-    abs_diff = np.abs(img1.astype(np.float32) - img2.astype(np.float32))
-    l1_loss = np.mean(abs_diff)
-    return l1_loss
+    def chamfer_loss(img_a: np.ndarray, img_b: np.ndarray) -> float:
+        """
+        Computes Chamfer Distance from edges in img_a to nearest edges in img_b.
+        Both inputs must be binary edge maps (0 or 255), e.g., after cv2.Canny.
+        Returns mean squared distance.
+        """
+        # Ensure binary format (0/255)
+        edges_a = (img_a > 0).astype(np.uint8) * 255
+        edges_b = (img_b > 0).astype(np.uint8) * 255
+
+        # Check for empty edge maps
+        if np.count_nonzero(edges_a) == 0 or np.count_nonzero(edges_b) == 0:
+            return float('inf')
+
+        # Distance transform of the inverse of img_b:
+        # each pixel holds distance to nearest edge in img_b
+        dt = cv2.distanceTransform(255 - edges_b, cv2.DIST_L2, 3)
+
+        # Sample distances at edge locations in img_a
+        distances = dt[edges_a > 0]
+
+        # Return mean squared distance
+        return np.mean(distances ** 2)
+    return chamfer_loss(img2, img1)
+    
 
 
-roll, pitch, yaw, tx, ty, tz = 0, 0, 0, 0, 0, 50
-img = cv2.imread('sample.png')
-img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+roll, pitch, yaw, tx, ty, tz = 0, 0, 90, 0, 0, 15
+img = cv2.imread('original.jpeg')
+img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 img = cv2.Canny(img, 100, 200)
 
 init_pose = np.array([0, 0, 0, 0, 0, 20]) 
 print(loss_function(init_pose, img))
 
 bounds = [
-        (-90, 90),    # roll
-        (-90, 90),    # pitch
-        (-180, 180),  # yaw
-        (-200, 200),  # tx
-        (-200, 200),  # ty
-        (10, 500)     # tz
+        (-10, 10),    # roll
+        (-10, 10),    # pitch
+        (-270, 270),  # yaw
+        (-10, 10),  # tx
+        (-10, 10),  # ty
+        (1, 50)     # tz
     ]
 
-res = minimize(
+
+result = differential_evolution(
     loss_function,
-    init_pose,
-    args=(img, ),
-    method='L-BFGS-B',
     bounds=bounds,
-    options={'maxiter':300, 'disp' : True,}
+    args=(img,),  # your image as fixed argument
+    maxiter=1,
+    popsize=15,
+    polish=True  # optional: refine with local search at the end
 )
 
-optimized_pose = res.x
+# result = dual_annealing(
+#     func=loss_function,
+#     bounds=bounds,
+#     args=(img,),  # pass extra args to loss function
+#     maxiter=30
+# )
+
+optimized_pose = result.x
 print(optimized_pose)
